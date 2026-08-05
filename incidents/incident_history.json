@@ -1,0 +1,55 @@
+{
+  "_readme": "Local incident archive. Each record is a past outage: its error signature, a log excerpt, what the diagnosis was, and what fix resolved it. The diagnose.py script matches new outages against these records by error_type + keyword overlap in the traceback. Add a new record here every time a real (or drilled) outage gets a confirmed fix, so future matches get better over time.",
+  "incidents": [
+    {
+      "incident_id": "seed-001",
+      "error_type": "DatabaseConnectionError",
+      "first_seen": "2026-06-01T09:12:00Z",
+      "log_excerpt": "ConnectionRefusedError: [Errno 61] Connection refused ... psycopg2.OperationalError: could not connect to server: Connection refused",
+      "keywords": ["connectionrefusederror", "psycopg2", "operationalerror", "connection refused", "port 5432"],
+      "diagnosis": "The application could not reach the Postgres database. Most commonly caused by the DB container/service being down, wrong DATABASE_URL host/port, or a firewall/security group blocking the connection.",
+      "recommended_fix": "1) Check the database process/container is running. 2) Verify DATABASE_URL host and port match the running instance. 3) Check network/firewall rules between app and DB. 4) Restart the DB service if it crashed, then restart the app.",
+      "confirmed_resolution": true
+    },
+    {
+      "incident_id": "seed-002",
+      "error_type": "OutOfMemoryError",
+      "first_seen": "2026-06-03T14:40:00Z",
+      "log_excerpt": "MemoryError: Unable to allocate array ... Process killed by OOM killer (exit code 137)",
+      "keywords": ["memoryerror", "oom", "killed", "exit code 137", "allocate"],
+      "diagnosis": "The process exceeded available memory and was killed by the OS OOM killer. Usually caused by processing an oversized batch/payload, a memory leak, or the host having insufficient RAM for current load.",
+      "recommended_fix": "1) Check recent request sizes/batch sizes for anomalies. 2) Look for memory leaks in long-running processes (restart as a stopgap). 3) Consider lowering batch size or adding pagination. 4) If load has genuinely grown, increase host memory or add horizontal scaling.",
+      "confirmed_resolution": true
+    },
+    {
+      "incident_id": "seed-003",
+      "error_type": "UpstreamTimeoutError",
+      "first_seen": "2026-06-05T11:05:00Z",
+      "log_excerpt": "requests.exceptions.ReadTimeout: HTTPConnectionPool ... Read timed out. (read timeout=5)",
+      "keywords": ["readtimeout", "timed out", "httpconnectionpool", "timeout=5"],
+      "diagnosis": "A call to a downstream/upstream dependency (e.g. a third-party API) did not respond within the configured timeout. Could be the dependency being slow/down, or the timeout being set too aggressively for normal conditions.",
+      "recommended_fix": "1) Check the upstream service's own status page. 2) Check recent latency trends for that dependency. 3) If the dependency is healthy but slow, consider raising the timeout and/or adding retry with backoff. 4) If the dependency is down, this is likely a pass-through outage — monitor for their recovery.",
+      "confirmed_resolution": true
+    },
+    {
+      "incident_id": "seed-004",
+      "error_type": "UnhandledNullReferenceError",
+      "first_seen": "2026-06-08T16:22:00Z",
+      "log_excerpt": "AttributeError: 'NoneType' object has no attribute 'items' ... build_response",
+      "keywords": ["attributeerror", "nonetype", "has no attribute"],
+      "diagnosis": "Code assumed a value (e.g. a user profile lookup) would never be None, but a code path returned None and the app crashed dereferencing it. Typically a missing null-check after a lookup that can legitimately miss.",
+      "recommended_fix": "1) Identify the lookup that returned None (see file/line in traceback). 2) Add a null-check / default-value fallback there. 3) Add a regression test covering the missing-record case. 4) Deploy the fix; this is a code bug, not an infra issue.",
+      "confirmed_resolution": true
+    },
+    {
+      "incident_id": "seed-005",
+      "error_type": "DiskSpaceError",
+      "first_seen": "2026-06-10T08:50:00Z",
+      "log_excerpt": "OSError: [Errno 28] No space left on device ... write_upload",
+      "keywords": ["errno 28", "no space left on device", "oserror"],
+      "diagnosis": "The host's disk filled up, so writes (uploads, logs, temp files) started failing. Common causes: unrotated logs, an upload directory never cleaned up, or a runaway temp-file writer.",
+      "recommended_fix": "1) Check disk usage (df -h) and find what's consuming space. 2) Clear/rotate old logs and temp files. 3) Set up log rotation and a cleanup cron for the upload/temp directory if not already in place. 4) Restart the app once space is freed.",
+      "confirmed_resolution": true
+    }
+  ]
+}
