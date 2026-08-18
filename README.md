@@ -1,75 +1,106 @@
-# Outage Watch
+# 🚨 Outage Watch — Automated Outage Detection & Diagnosis Agent
 
-A local, self-hosted demo of automated outage detection and diagnosis:
-a sample web app you can crash on purpose, a log-matching diagnosis
-engine, and an [OpenClaw](https://github.com/) skill that watches for
-outages on a heartbeat and reports a diagnosis + recommended fix.
+<p align="center">
+  <strong>A self-hosted, local observability and incident diagnosis copilot with heartbeat monitoring and incident memory.</strong>
+</p>
 
-Runs entirely on your own machine (tested for a MacBook Air M4, 16GB RAM,
-using [Ollama](https://ollama.com) + Qwen 2.5 7B). No cloud services
-required, and it never auto-executes a fix — diagnosis and recommendation
-only, human applies the fix.
+<p align="center">
+  <a href="#license"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" alt="License"></a>
+  <a href="https://flask.palletsprojects.com"><img src="https://img.shields.io/badge/Framework-Flask-black?style=flat-square&logo=flask" alt="Flask"></a>
+  <a href="https://ollama.com"><img src="https://img.shields.io/badge/AI-Ollama%20%2F%20Qwen%202.5-black?style=flat-square&logo=ollama" alt="Ollama"></a>
+  <a href="https://www.python.org"><img src="https://img.shields.io/badge/Python-3.10%2B-3776ab?style=flat-square&logo=python" alt="Python"></a>
+</p>
 
-## How it works
+---
 
-1. **`app/`** — a small Flask site with a `/health` endpoint and a
-   `/crash/<kind>` endpoint that intentionally triggers one of five
-   failure types (`db`, `memory`, `timeout`, `nullref`, `disk`), logging
-   a realistic error + stack trace each time.
-2. **`scripts/crash_trigger.py`** — hits `/crash/<kind>` to generate a
-   test outage on demand.
-3. **`incidents/incident_history.json`** — the "memory": a growing JSON
-   archive of past incidents, each with an error signature, diagnosis,
-   and the fix that was confirmed to work. Seeded with 5 example records.
-4. **`scripts/diagnose.py`** — the core loop: checks `/health`, and on
-   failure reads the latest log entry, matches it against
-   `incident_history.json` by error type + keyword overlap, and prints
-   a diagnosis and recommended fix. If nothing matches, it logs the
-   outage as "unconfirmed" so a human can fill in the real diagnosis
-   later — that's how the match quality improves over time.
-5. **`openclaw/outage_skill.md`** — how to wire `diagnose.py` into
-   OpenClaw's heartbeat scheduler, with permissions scoped to
-   read-only + diagnose-only (no remediation, no network beyond
-   localhost).
+## 📌 Overview
 
-## Quick start
+**Outage Watch** is a local-first, autonomous reliability engineering tool that combines heartbeat health checks, stack trace extraction, error fingerprinting, and LLM-assisted incident triage.
+
+It simulates realistic production outages on demand, captures log signatures, queries a verified incident memory store (`incidents/incident_history.json`), and recommends proven, human-verified remediation steps.
+
+> **🛡️ Core Reliability Rule: Recommend, Never Auto-Mutate.** Outage Watch operates strictly on a read-and-diagnose boundary. It never executes destructive restarts or unverified code patches without human review.
+
+---
+
+## 🏗️ System Architecture
+
+```mermaid
+flowchart LR
+    A[Flask Service :5001] -->|Heartbeat /health| B[Outage Watch Monitor]
+    B -->|Health Check Fails| C[Log & Stack Trace Ingestion]
+    C --> D{Error Signature Matcher}
+    D -->|Match Found| E[(Incident History Memory)]
+    D -->|Novel Error| F[Local LLM Diagnostic Agent<br>Ollama / Qwen 2.5]
+    E --> G[Human-Verified Remediation Plan]
+    F --> G
+    G --> H[Human Operator Review & Resolution]
+```
+
+---
+
+## ✨ Key Features
+
+- **⚡ Configurable Fault Injection:** Intentionally inject 5 distinct failure scenarios via the `/crash/<kind>` endpoint (`db`, `memory`, `timeout`, `nullref`, `disk`).
+- **🧠 Incident Signature Memory:** Matches live error traces against `incidents/incident_history.json` by error class, exception type, and token similarity.
+- **🤖 Local LLM Fallback Diagnosis:** Uses **Ollama + Qwen 2.5 7B** to analyze novel, unindexed error signatures and generate root-cause hypotheses.
+- **🔄 Zero-Cloud Execution:** Runs 100% on your local machine with zero external SaaS dependencies.
+- **📦 OpenClaw Integration:** Includes an `outage_skill.md` definition ready to bind to OpenClaw heartbeat schedulers.
+
+---
+
+## 💥 Simulated Failure Modes
+
+| Kind | Triggered Scenario | Simulated Error Signature |
+| :--- | :--- | :--- |
+| `db` | Database connection pool exhaustion | `OperationalError: connection pool exhausted (max 10)` |
+| `memory` | Heap / Buffer memory leak | `MemoryError: process exceeded 512MB heap threshold` |
+| `timeout` | Upstream gateway / API timeout | `GatewayTimeout: downstream payment API timed out after 30s` |
+| `nullref` | Unhandled NullPointerException / TypeError | `AttributeError: 'NoneType' object has no attribute 'get'` |
+| `disk` | Disk full / File write permission error | `IOError: [Errno 28] No space left on device` |
+
+---
+
+## 🚀 Quick Start
+
+### 1. Launch the Target Application
 
 ```bash
-cd app
-python3 -m venv .venv && source .venv/bin/activate
+# Clone the repository
+git clone https://github.com/MadanMohan0537/Outage-Watch.git
+cd Outage-Watch/app
+
+# Set up Python environment
+python3 -m venv .venv
+# Windows: .venv\Scripts\activate | Linux/macOS: source .venv/bin/activate
 pip install -r requirements.txt
-python3 app.py            # serves on http://localhost:5001
+
+# Start application server
+python app.py # Serves at http://localhost:5001
 ```
 
-In another terminal:
+### 2. Trigger an Outage & Run Diagnosis
+
+In a second terminal window:
 
 ```bash
-cd scripts
-python3 crash_trigger.py db          # trigger a test outage
-python3 diagnose.py --use-llm        # detect it, match it, diagnose it
+cd ../scripts
+
+# Trigger a database outage
+python crash_trigger.py db
+
+# Run automated detection & diagnosis
+python diagnose.py --use-llm
 ```
 
-Reset the site back to healthy:
+### 3. Reset Service to Healthy State
 
 ```bash
 curl -X POST http://localhost:5001/recover
 ```
 
-See `SETUP_GUIDE.md` for full install steps (Ollama, Qwen 2.5 7B,
-OpenClaw) and RAM/feasibility notes for 16GB machines.
+---
 
-## Design principle: recommend, don't auto-fix
+## 📄 License
 
-This project intentionally never takes remediation action on its own —
-no restarts, no redeploys, no code changes. It only ever surfaces a
-diagnosis and a fix a human has previously confirmed worked, and asks a
-human to apply it. See `openclaw/outage_skill.md` for the reasoning and
-how to keep any future auto-remediation narrowly scoped if you build it.
-
-## Growing the incident history
-
-Every time a real (or drilled) outage gets fixed, update its entry in
-`incidents/incident_history.json` with the actual diagnosis, the actual
-fix, and `"confirmed_resolution": true`. The matching only ever
-recommends fixes that have been human-verified, and gets more useful
-the more incidents get logged.
+MIT License — see [LICENSE](LICENSE) for details.
