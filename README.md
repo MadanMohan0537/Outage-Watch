@@ -1,106 +1,78 @@
-# 🚨 Outage Watch — Automated Outage Detection & Diagnosis Agent
+# Outage Watch
 
-<p align="center">
-  <strong>A self-hosted, local observability and incident diagnosis copilot with heartbeat monitoring and incident memory.</strong>
-</p>
+A local outage-triage demo that checks a Flask service, extracts an error signature and recommends a response from incident history.
 
-<p align="center">
-  <a href="#license"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" alt="License"></a>
-  <a href="https://flask.palletsprojects.com"><img src="https://img.shields.io/badge/Framework-Flask-black?style=flat-square&logo=flask" alt="Flask"></a>
-  <a href="https://ollama.com"><img src="https://img.shields.io/badge/AI-Ollama%20%2F%20Qwen%202.5-black?style=flat-square&logo=ollama" alt="Ollama"></a>
-  <a href="https://www.python.org"><img src="https://img.shields.io/badge/Python-3.10%2B-3776ab?style=flat-square&logo=python" alt="Python"></a>
-</p>
+**Recommend-only:** the diagnosis script does not execute a fix. It can append an unconfirmed incident record for human review. Monitoring runs each time the script is invoked; recurring checks require an external scheduler.
 
----
+## How it works
 
-## 📌 Overview
+1. Check the sample application's `/health` endpoint.
+2. If unhealthy, read the latest outage block from the local log.
+3. Match the error type and keywords against [incident history](incidents/incident_history.json).
+4. Show a matching diagnosis and recommended fix, or flag an unknown incident.
+5. Optionally use local Ollama to polish a matched diagnosis into a short summary.
 
-**Outage Watch** is a local-first, autonomous reliability engineering tool that combines heartbeat health checks, stack trace extraction, error fingerprinting, and LLM-assisted incident triage.
+The fault endpoints simulate outages; they do not intentionally exhaust your real database pool, memory or disk.
 
-It simulates realistic production outages on demand, captures log signatures, queries a verified incident memory store (`incidents/incident_history.json`), and recommends proven, human-verified remediation steps.
+## Quick start
 
-> **🛡️ Core Reliability Rule: Recommend, Never Auto-Mutate.** Outage Watch operates strictly on a read-and-diagnose boundary. It never executes destructive restarts or unverified code patches without human review.
-
----
-
-## 🏗️ System Architecture
-
-```mermaid
-flowchart LR
-    A[Flask Service :5001] -->|Heartbeat /health| B[Outage Watch Monitor]
-    B -->|Health Check Fails| C[Log & Stack Trace Ingestion]
-    C --> D{Error Signature Matcher}
-    D -->|Match Found| E[(Incident History Memory)]
-    D -->|Novel Error| F[Local LLM Diagnostic Agent<br>Ollama / Qwen 2.5]
-    E --> G[Human-Verified Remediation Plan]
-    F --> G
-    G --> H[Human Operator Review & Resolution]
-```
-
----
-
-## ✨ Key Features
-
-- **⚡ Configurable Fault Injection:** Intentionally inject 5 distinct failure scenarios via the `/crash/<kind>` endpoint (`db`, `memory`, `timeout`, `nullref`, `disk`).
-- **🧠 Incident Signature Memory:** Matches live error traces against `incidents/incident_history.json` by error class, exception type, and token similarity.
-- **🤖 Local LLM Fallback Diagnosis:** Uses **Ollama + Qwen 2.5 7B** to analyze novel, unindexed error signatures and generate root-cause hypotheses.
-- **🔄 Zero-Cloud Execution:** Runs 100% on your local machine with zero external SaaS dependencies.
-- **📦 OpenClaw Integration:** Includes an `outage_skill.md` definition ready to bind to OpenClaw heartbeat schedulers.
-
----
-
-## 💥 Simulated Failure Modes
-
-| Kind | Triggered Scenario | Simulated Error Signature |
-| :--- | :--- | :--- |
-| `db` | Database connection pool exhaustion | `OperationalError: connection pool exhausted (max 10)` |
-| `memory` | Heap / Buffer memory leak | `MemoryError: process exceeded 512MB heap threshold` |
-| `timeout` | Upstream gateway / API timeout | `GatewayTimeout: downstream payment API timed out after 30s` |
-| `nullref` | Unhandled NullPointerException / TypeError | `AttributeError: 'NoneType' object has no attribute 'get'` |
-| `disk` | Disk full / File write permission error | `IOError: [Errno 28] No space left on device` |
-
----
-
-## 🚀 Quick Start
-
-### 1. Launch the Target Application
+Use Python 3.10 or later. From the repository root:
 
 ```bash
-# Clone the repository
 git clone https://github.com/MadanMohan0537/Outage-Watch.git
-cd Outage-Watch/app
-
-# Set up Python environment
-python3 -m venv .venv
-# Windows: .venv\Scripts\activate | Linux/macOS: source .venv/bin/activate
-pip install -r requirements.txt
-
-# Start application server
-python app.py # Serves at http://localhost:5001
+cd Outage-Watch
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install -r app/requirements.txt
+python app/app.py
 ```
 
-### 2. Trigger an Outage & Run Diagnosis
+On Windows, activate with `.venv\Scripts\activate`. Keep this terminal running. The sample service listens at http://localhost:5001.
 
-In a second terminal window:
-
-```bash
-cd ../scripts
-
-# Trigger a database outage
-python crash_trigger.py db
-
-# Run automated detection & diagnosis
-python diagnose.py --use-llm
-```
-
-### 3. Reset Service to Healthy State
+In a second terminal, open the same repository and activate the same virtual environment:
 
 ```bash
+python scripts/crash_trigger.py db
+python scripts/diagnose.py
 curl -X POST http://localhost:5001/recover
+python scripts/diagnose.py
 ```
 
----
+The final check should report a healthy service. Read the diagnostic output before using any suggested remediation on another system.
 
-## 📄 License
+## Simulated failures
 
-MIT License — see [LICENSE](LICENSE) for details.
+| Kind | Scenario |
+| --- | --- |
+| `db` | Database connection-pool exhaustion |
+| `memory` | Memory threshold exceeded |
+| `timeout` | Downstream payment timeout |
+| `nullref` | Missing object access |
+| `disk` | Disk write failure |
+
+Replace `db` in the trigger command to explore another scenario.
+
+## Optional local model
+
+With Ollama, the Python Ollama package and a compatible local model configured, run:
+
+```bash
+python scripts/diagnose.py --use-llm --model qwen2.5:7b
+```
+
+If the optional model is unavailable, the script falls back to the stored diagnosis. An unmatched incident still needs human triage; a polished narrative does not confirm a root cause.
+
+## Configuration and integration
+
+- `--url` selects the target service URL; the demo's local log remains the diagnosis source.
+- [SETUP_GUIDE.md](SETUP_GUIDE.md) covers additional setup details.
+- [OpenClaw skill definition](openclaw/outage_skill.md) describes heartbeat integration. Including this file does not automatically install or schedule monitoring.
+- [scripts/diagnose.py](scripts/diagnose.py) contains health checks, matching and incident-history updates.
+
+## Boundaries
+
+The repository is a local demonstration, not a complete observability platform. It has no distributed tracing or verified production incident benchmark. Protect logs and incident records, review unknown entries, and validate a recommended fix before applying it.
+
+## Contributions and license
+
+Start with tests for known and unknown signatures, unhealthy endpoints and unavailable model runtimes. No license file is currently included.
