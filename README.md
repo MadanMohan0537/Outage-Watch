@@ -77,6 +77,20 @@ Optional, when the Ollama daemon is running, the separate `ollama` Python packag
 python scripts/diagnose.py --use-llm --model qwen2.5:7b
 ```
 
+## Deployment
+
+Cloudflare Workers is the planned deployment target. It is not configured yet, and this repository is not deployed. There is no `wrangler.toml`, no Worker entry point, and no workers.dev URL.
+
+Publishing, once that exists, is `npx wrangler deploy`. Getting there still requires:
+
+- a `wrangler.toml`
+- a Worker entry point
+- for this Python code, either Cloudflare Python Workers or a JavaScript/TypeScript port
+
+```bash
+npx wrangler deploy
+```
+
 ## License
 
 No license file is included yet.
